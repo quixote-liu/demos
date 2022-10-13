@@ -67,10 +67,11 @@ func Begin() error {
 		done <- struct{}{}
 	}()
 
+	// 定制器，执行不能超过一分钟
+	timeAfter := time.After(time.Minute)
 	for {
 		select {
-		case <-time.After(time.Minute):
-			// 限时一分钟
+		case <-timeAfter:
 			return fmt.Errorf("time over")
 		case err := <-errprint:
 			return err
