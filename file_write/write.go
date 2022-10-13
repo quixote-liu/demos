@@ -18,15 +18,22 @@ import (
 
 func Begin() error {
 	datach := make(chan int)
+
 	errprint := make(chan error)
-	fileLines := make(chan int)
+	defer close(errprint)
+
+	done := make(chan struct{})
+	defer close(done)
+
+	totalLines := 1000
 
 	// 线程A
 	go func() {
-		for {
+		for i := 0; i < totalLines; i++ {
 			rand.Seed(time.Now().UnixMicro())
 			datach <- rand.Int()
 		}
+		close(datach)
 	}()
 
 	// 线程B
@@ -38,13 +45,16 @@ func Begin() error {
 			return
 		}
 		defer file.Close()
-		lines := 0
 		for {
+			data, ok := <-datach
+			if !ok {
+				break
+			}
 			d := struct {
 				Data int   `json:"data"`
 				Time int64 `json:"time"`
 			}{
-				Data: <-datach,
+				Data: data,
 				Time: time.Now().UnixMicro(),
 			}
 			dd, _ := json.Marshal(d)
@@ -53,9 +63,8 @@ func Begin() error {
 				errprint <- err
 				return
 			}
-			lines++
-			fileLines <- lines
 		}
+		done <- struct{}{}
 	}()
 
 	for {
@@ -65,10 +74,8 @@ func Begin() error {
 			return fmt.Errorf("time over")
 		case err := <-errprint:
 			return err
-		case lines := <-fileLines:
-			if lines >= 1000 {
-				return nil
-			}
+		case <-done:
+			return nil
 		}
 	}
 }
